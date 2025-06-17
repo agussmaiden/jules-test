@@ -17,8 +17,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import java.util.List;
 import java.util.Map;
-import java.security.NoSuchAlgorithmException; // Added
+import java.security.NoSuchAlgorithmException;
 import com.example.julestest.controller.dto.PdfFileNameUpdateDto;
+import com.example.julestest.exception.UnsupportedHashAlgorithmException; // Added
 import jakarta.validation.Valid;
 
 @RestController
@@ -45,15 +46,20 @@ public class PdfDocumentController {
             // Pass the algorithm to the service method
             PdfDocument savedDocument = pdfDocumentService.storePdfFile(file, algorithm);
             return ResponseEntity.status(HttpStatus.CREATED).body(savedDocument);
-        } catch (IllegalArgumentException e) { // Catching specific exception from service for bad algorithm
+        } catch (UnsupportedHashAlgorithmException e) { // Captura específica para la nueva excepción
             return ResponseEntity.badRequest().body(e.getMessage());
-        } catch (NoSuchAlgorithmException e) { // Should ideally not happen if service validates algorithms
-            // Log this as it indicates an issue with algorithm list/logic
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Internal error with hashing algorithm.");
+        } catch (IllegalArgumentException e) {
+            // Mantener por si otras IllegalArgumentExceptions son lanzadas por otras validaciones
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (NoSuchAlgorithmException e) {
+            // Log this as it indicates an issue with algorithm list/logic in service (should not happen in normal flow)
+            // Consider logging 'e' for details
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error interno con el algoritmo de hash.");
         } catch (Exception e) {
             // Log the exception e.g., e.printStackTrace(); or use a logger
+            // Consider logging 'e' for details
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                 .body("Could not upload the file: " + e.getMessage());
+                                 .body("No se pudo cargar el archivo: " + e.getMessage());
         }
     }
 

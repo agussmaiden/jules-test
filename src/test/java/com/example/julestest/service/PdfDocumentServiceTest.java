@@ -1,6 +1,7 @@
 package com.example.julestest.service;
 
 import com.example.julestest.domain.PdfDocument;
+import com.example.julestest.exception.UnsupportedHashAlgorithmException; // Added
 import com.example.julestest.repository.PdfDocumentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -163,11 +164,14 @@ class PdfDocumentServiceTest {
     }
 
     @Test
-    void storePdfFile_withUnsupportedAlgorithm_shouldThrowIllegalArgumentException() {
+    void storePdfFile_withUnsupportedAlgorithm_shouldThrowUnsupportedHashAlgorithmException() { // Name changed
         String unsupportedAlgorithm = "SHA-3-NOT-SUPPORTED";
-        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+
+        // Excepción esperada cambiada aquí:
+        UnsupportedHashAlgorithmException exception = assertThrows(UnsupportedHashAlgorithmException.class, () -> {
             pdfDocumentService.storePdfFile(mockFile, unsupportedAlgorithm);
         });
+
         assertTrue(exception.getMessage().contains("Unsupported hash algorithm"));
         assertTrue(exception.getMessage().contains(unsupportedAlgorithm));
         verify(pdfDocumentRepository, never()).save(any(PdfDocument.class));

@@ -1,6 +1,7 @@
 package com.example.julestest.service;
 
 import com.example.julestest.domain.PdfDocument;
+import com.example.julestest.exception.UnsupportedHashAlgorithmException; // Added
 import com.example.julestest.repository.PdfDocumentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -35,8 +36,9 @@ public class PdfDocumentService {
         } else if (SUPPORTED_ALGORITHMS.contains(requestedAlgorithm.toUpperCase())) {
             algorithmToUse = requestedAlgorithm.toUpperCase();
         } else {
-            throw new IllegalArgumentException("Unsupported hash algorithm: " + requestedAlgorithm +
-                                               ". Supported algorithms are: " + SUPPORTED_ALGORITHMS);
+            // Esta es la línea que cambia:
+            throw new UnsupportedHashAlgorithmException("Unsupported hash algorithm: " + requestedAlgorithm +
+                                                       ". Supported algorithms are: " + SUPPORTED_ALGORITHMS);
         }
 
         String fileName = file.getOriginalFilename();
