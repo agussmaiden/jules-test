@@ -11,42 +11,58 @@ import java.io.InputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.Arrays; // Added
 import java.util.HexFormat; // Preferred for Java 17+
+import java.util.HashSet; // Added
 import java.util.List;
 import java.util.Optional;
+import java.util.Set; // Added
 
 @Service
 @RequiredArgsConstructor
 public class PdfDocumentService {
 
     private final PdfDocumentRepository pdfDocumentRepository;
-    private static final String HASH_ALGORITHM = "SHA-256";
+    // Define supported algorithms
+    private static final Set<String> SUPPORTED_ALGORITHMS =
+        new HashSet<>(Arrays.asList("MD5", "SHA-1", "SHA-256", "SHA-512"));
+    private static final String DEFAULT_ALGORITHM = "SHA-256";
 
-    public PdfDocument storePdfFile(MultipartFile file) throws IOException, NoSuchAlgorithmException {
+    public PdfDocument storePdfFile(MultipartFile file, String requestedAlgorithm) throws IOException, NoSuchAlgorithmException {
+        String algorithmToUse;
+        if (requestedAlgorithm == null || requestedAlgorithm.trim().isEmpty()) {
+            algorithmToUse = DEFAULT_ALGORITHM;
+        } else if (SUPPORTED_ALGORITHMS.contains(requestedAlgorithm.toUpperCase())) {
+            algorithmToUse = requestedAlgorithm.toUpperCase();
+        } else {
+            throw new IllegalArgumentException("Unsupported hash algorithm: " + requestedAlgorithm +
+                                               ". Supported algorithms are: " + SUPPORTED_ALGORITHMS);
+        }
+
         String fileName = file.getOriginalFilename();
         String hashCode;
 
         try (InputStream inputStream = file.getInputStream()) {
-            MessageDigest digest = MessageDigest.getInstance(HASH_ALGORITHM);
+            MessageDigest digest = MessageDigest.getInstance(algorithmToUse); // Use validated algorithm
             byte[] buffer = new byte[8192];
             int bytesRead;
             while ((bytesRead = inputStream.read(buffer)) != -1) {
                 digest.update(buffer, 0, bytesRead);
             }
             byte[] hashedBytes = digest.digest();
-            hashCode = HexFormat.of().formatHex(hashedBytes); // Using Java 17's HexFormat
+            hashCode = HexFormat.of().formatHex(hashedBytes);
         }
 
         PdfDocument pdfDocument = new PdfDocument();
         pdfDocument.setFileName(fileName);
         pdfDocument.setHashCode(hashCode);
-        pdfDocument.setHashAlgorithm(HASH_ALGORITHM);
+        pdfDocument.setHashAlgorithm(algorithmToUse); // Store the actual algorithm used
         pdfDocument.setUploadTimestamp(LocalDateTime.now());
 
         return pdfDocumentRepository.save(pdfDocument);
     }
 
-    // Add these new methods:
+    // Other service methods (getAll, getById, etc.) remain unchanged.
     public List<PdfDocument> getAllPdfDocuments() {
         return pdfDocumentRepository.findAll();
     }

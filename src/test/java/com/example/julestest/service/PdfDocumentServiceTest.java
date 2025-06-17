@@ -35,44 +35,49 @@ class PdfDocumentServiceTest {
 
     private MockMultipartFile mockFile;
     private final String testFileContent = "This is a test PDF content.";
-    private final String expectedHashAlgorithm = "SHA-256";
-    private String expectedHashCode;
+    // Removed: private final String expectedHashAlgorithm = "SHA-256";
+    // Removed: private String expectedHashCode;
 
     @BeforeEach
-    void setUp() throws NoSuchAlgorithmException {
+    void setUp() { // Removed throws NoSuchAlgorithmException as hash is not calculated here anymore
         mockFile = new MockMultipartFile(
                 "file", // parameter name
                 "test.pdf", // original filename
                 "application/pdf", // content type
                 testFileContent.getBytes(StandardCharsets.UTF_8) // content
         );
-
-        // Calculate expected hash
-        MessageDigest digest = MessageDigest.getInstance(expectedHashAlgorithm);
-        byte[] hashedBytes = digest.digest(testFileContent.getBytes(StandardCharsets.UTF_8));
-        expectedHashCode = HexFormat.of().formatHex(hashedBytes);
+        // Removed global expectedHashCode calculation
     }
 
     @Test
-    void storePdfFile_shouldProcessFileAndSaveDocument() throws IOException, NoSuchAlgorithmException {
-        // Arrange
-        PdfDocument savedDocument = new PdfDocument();
-        savedDocument.setId(1L);
-        savedDocument.setFileName(mockFile.getOriginalFilename());
-        savedDocument.setHashCode(expectedHashCode);
-        savedDocument.setHashAlgorithm(expectedHashAlgorithm);
-        savedDocument.setUploadTimestamp(LocalDateTime.now()); // Timestamp will be close
+    void storePdfFile_shouldProcessFileAndSaveDocument_withSha256() throws IOException, NoSuchAlgorithmException {
+        String algorithm = "SHA-256";
+        MessageDigest digest = MessageDigest.getInstance(algorithm);
+        byte[] hashedBytes = digest.digest(testFileContent.getBytes(StandardCharsets.UTF_8));
+        String currentExpectedHashCode = HexFormat.of().formatHex(hashedBytes);
 
-        when(pdfDocumentRepository.save(any(PdfDocument.class))).thenReturn(savedDocument);
+        // Arrange
+        // The savedDocument can be simplified as the service method creates and populates it.
+        // We only need to ensure the save method is called and returns something sensible.
+        when(pdfDocumentRepository.save(any(PdfDocument.class))).thenAnswer(invocation -> {
+            PdfDocument docToSave = invocation.getArgument(0);
+            // Simulate setting an ID upon saving
+            if (docToSave.getId() == null) { // Check if ID is not set (typical for new entities)
+                 // For test predictability, if we need to assert ID, we can set it here.
+                 // However, the main focus is on hash and algorithm.
+                 // Let's assume an ID is set by the database, so we don't need to mock its exact value here.
+            }
+            return docToSave;
+        });
 
         // Act
-        PdfDocument result = pdfDocumentService.storePdfFile(mockFile);
+        PdfDocument result = pdfDocumentService.storePdfFile(mockFile, algorithm);
 
         // Assert
         assertNotNull(result);
         assertEquals(mockFile.getOriginalFilename(), result.getFileName());
-        assertEquals(expectedHashCode, result.getHashCode());
-        assertEquals(expectedHashAlgorithm, result.getHashAlgorithm());
+        assertEquals(currentExpectedHashCode, result.getHashCode());
+        assertEquals(algorithm, result.getHashAlgorithm());
         assertNotNull(result.getUploadTimestamp());
 
         ArgumentCaptor<PdfDocument> documentCaptor = ArgumentCaptor.forClass(PdfDocument.class);
@@ -80,33 +85,92 @@ class PdfDocumentServiceTest {
 
         PdfDocument capturedDocument = documentCaptor.getValue();
         assertEquals(mockFile.getOriginalFilename(), capturedDocument.getFileName());
-        assertEquals(expectedHashCode, capturedDocument.getHashCode());
-        assertEquals(expectedHashAlgorithm, capturedDocument.getHashAlgorithm());
-        assertNotNull(capturedDocument.getUploadTimestamp()); // Check timestamp exists
+        assertEquals(currentExpectedHashCode, capturedDocument.getHashCode());
+        assertEquals(algorithm, capturedDocument.getHashAlgorithm());
+        assertNotNull(capturedDocument.getUploadTimestamp());
     }
 
     @Test
-    void storePdfFile_withEmptyFile_shouldProcessCorrectly() throws IOException, NoSuchAlgorithmException {
+    void storePdfFile_withEmptyFile_shouldProcessCorrectly_withDefaultAlgorithm() throws IOException, NoSuchAlgorithmException {
         MockMultipartFile emptyFile = new MockMultipartFile("file", "empty.pdf", "application/pdf", new byte[0]);
+        String defaultAlgorithm = "SHA-256"; // As defined in service
 
-        MessageDigest digest = MessageDigest.getInstance(expectedHashAlgorithm); // expectedHashAlgorithm is a field
+        MessageDigest digest = MessageDigest.getInstance(defaultAlgorithm);
         byte[] hashedBytes = digest.digest(new byte[0]);
         String emptyContentExpectedHashCode = HexFormat.of().formatHex(hashedBytes);
 
-        // Arrange for the save operation
         when(pdfDocumentRepository.save(any(PdfDocument.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // Act
-        PdfDocument result = pdfDocumentService.storePdfFile(emptyFile);
+        PdfDocument result = pdfDocumentService.storePdfFile(emptyFile, null); // Test default by passing null
 
         // Assert
         assertNotNull(result);
         assertEquals("empty.pdf", result.getFileName());
         assertEquals(emptyContentExpectedHashCode, result.getHashCode());
-        assertEquals(expectedHashAlgorithm, result.getHashAlgorithm());
+        assertEquals(defaultAlgorithm, result.getHashAlgorithm()); // Verify default algorithm stored
         assertNotNull(result.getUploadTimestamp());
-
         verify(pdfDocumentRepository, times(1)).save(any(PdfDocument.class));
+    }
+
+    // New tests for algorithm handling:
+    @Test
+    void storePdfFile_withNullAlgorithm_shouldUseDefaultAlgorithm() throws IOException, NoSuchAlgorithmException {
+        String defaultAlgorithm = "SHA-256"; // As defined in service
+        MessageDigest digest = MessageDigest.getInstance(defaultAlgorithm);
+        byte[] hashedBytes = digest.digest(testFileContent.getBytes(StandardCharsets.UTF_8));
+        String currentExpectedHashCode = HexFormat.of().formatHex(hashedBytes);
+
+        when(pdfDocumentRepository.save(any(PdfDocument.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PdfDocument result = pdfDocumentService.storePdfFile(mockFile, null); // Pass null for algorithm
+
+        assertEquals(currentExpectedHashCode, result.getHashCode());
+        assertEquals(defaultAlgorithm, result.getHashAlgorithm());
+        verify(pdfDocumentRepository, times(1)).save(any(PdfDocument.class));
+    }
+
+    @Test
+    void storePdfFile_withEmptyStringAlgorithm_shouldUseDefaultAlgorithm() throws IOException, NoSuchAlgorithmException {
+        String defaultAlgorithm = "SHA-256"; // As defined in service
+        MessageDigest digest = MessageDigest.getInstance(defaultAlgorithm);
+        byte[] hashedBytes = digest.digest(testFileContent.getBytes(StandardCharsets.UTF_8));
+        String currentExpectedHashCode = HexFormat.of().formatHex(hashedBytes);
+
+        when(pdfDocumentRepository.save(any(PdfDocument.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PdfDocument result = pdfDocumentService.storePdfFile(mockFile, "   "); // Pass blank string for algorithm
+
+        assertEquals(currentExpectedHashCode, result.getHashCode());
+        assertEquals(defaultAlgorithm, result.getHashAlgorithm());
+        verify(pdfDocumentRepository, times(1)).save(any(PdfDocument.class));
+    }
+
+    @Test
+    void storePdfFile_withMD5Algorithm_shouldProcessCorrectly() throws IOException, NoSuchAlgorithmException {
+        String algorithm = "MD5";
+        MessageDigest digest = MessageDigest.getInstance(algorithm);
+        byte[] hashedBytes = digest.digest(testFileContent.getBytes(StandardCharsets.UTF_8));
+        String currentExpectedHashCode = HexFormat.of().formatHex(hashedBytes);
+
+        when(pdfDocumentRepository.save(any(PdfDocument.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PdfDocument result = pdfDocumentService.storePdfFile(mockFile, algorithm);
+
+        assertEquals(currentExpectedHashCode, result.getHashCode());
+        assertEquals(algorithm, result.getHashAlgorithm());
+        verify(pdfDocumentRepository, times(1)).save(any(PdfDocument.class));
+    }
+
+    @Test
+    void storePdfFile_withUnsupportedAlgorithm_shouldThrowIllegalArgumentException() {
+        String unsupportedAlgorithm = "SHA-3-NOT-SUPPORTED";
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            pdfDocumentService.storePdfFile(mockFile, unsupportedAlgorithm);
+        });
+        assertTrue(exception.getMessage().contains("Unsupported hash algorithm"));
+        assertTrue(exception.getMessage().contains(unsupportedAlgorithm));
+        verify(pdfDocumentRepository, never()).save(any(PdfDocument.class));
     }
 
     @Test

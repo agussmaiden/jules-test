@@ -17,6 +17,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import java.util.List;
 import java.util.Map;
+import java.security.NoSuchAlgorithmException; // Added
 import com.example.julestest.controller.dto.PdfFileNameUpdateDto;
 import jakarta.validation.Valid;
 
@@ -28,7 +29,10 @@ public class PdfDocumentController {
     private final PdfDocumentService pdfDocumentService;
 
     @PostMapping("/upload")
-    public ResponseEntity<?> uploadPdfFile(@RequestParam("file") MultipartFile file) {
+    public ResponseEntity<?> uploadPdfFile(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(name = "algorithm", required = false) String algorithm) { // Added algorithm parameter
+
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body("File cannot be empty");
         }
@@ -38,8 +42,14 @@ public class PdfDocumentController {
         }
 
         try {
-            PdfDocument savedDocument = pdfDocumentService.storePdfFile(file);
+            // Pass the algorithm to the service method
+            PdfDocument savedDocument = pdfDocumentService.storePdfFile(file, algorithm);
             return ResponseEntity.status(HttpStatus.CREATED).body(savedDocument);
+        } catch (IllegalArgumentException e) { // Catching specific exception from service for bad algorithm
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (NoSuchAlgorithmException e) { // Should ideally not happen if service validates algorithms
+            // Log this as it indicates an issue with algorithm list/logic
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Internal error with hashing algorithm.");
         } catch (Exception e) {
             // Log the exception e.g., e.printStackTrace(); or use a logger
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
